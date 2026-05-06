@@ -12,37 +12,54 @@ model_name = "Qwen/Qwen2-0.5B-Instruct"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
-    torch_dtype=torch.float32,
-    device_map="auto"
-)
+    torch_dtype=torch.float32
+).to("cpu")
+
 
 # =========================
-# Función de traducción
+# Función de traducción (mejorada)
 # =========================
-def translate_text(text, target_lang="Spanish"):
-    prompt = f"Translate the following text to {target_lang}:\n{text}"
+def translate_text(text):
+    prompt = f"English: {text}\nSpanish:"
 
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    inputs = tokenizer(prompt, return_tensors="pt").to("cpu")
 
     outputs = model.generate(
         **inputs,
-        max_new_tokens=60,
-        temperature=0.7
+        max_new_tokens=12,        # evita que se alargue
+        temperature=0.0,          # cero creatividad
+        do_sample=False,          # determinístico
+        top_p=1.0,
+        repetition_penalty=1.2,
+        eos_token_id=tokenizer.eos_token_id
     )
 
     result = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-    return result.replace(prompt, "").strip()
+    # limpieza fuerte
+    if "Spanish:" in result:
+        translated = result.split("Spanish:")[-1]
+    else:
+        translated = result
+
+    translated = translated.strip()
+    translated = translated.split("\n")[0]
+
+    # quitar cosas raras adicionales
+    if "English:" in translated:
+        translated = translated.split("English:")[0]
+
+    return translated
 
 
 # =========================
-# HTML + CSS embebido
+# HTML
 # =========================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AI Translator - Qwen2</title>
+    <title>AI Translator</title>
     <style>
         body {
             font-family: Arial;
@@ -60,7 +77,6 @@ HTML_TEMPLATE = """
             border-radius: 15px;
             width: 420px;
             text-align: center;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
         }
 
         textarea {
@@ -81,23 +97,11 @@ HTML_TEMPLATE = """
             font-weight: bold;
         }
 
-        button:hover {
-            background: #0ea5e9;
-        }
-
         .result {
             margin-top: 20px;
             background: #334155;
             padding: 10px;
             border-radius: 10px;
-        }
-
-        h1 {
-            margin-bottom: 5px;
-        }
-
-        p {
-            opacity: 0.8;
         }
     </style>
 </head>
@@ -105,10 +109,10 @@ HTML_TEMPLATE = """
 <body>
 <div class="container">
     <h1>🌍 AI Translator</h1>
-    <p>Powered by Qwen2-0.5B (local)</p>
+    <p>English → Spanish (Qwen)</p>
 
     <form method="POST">
-        <textarea name="text" placeholder="Write text to translate...">{{ original_text }}</textarea>
+        <textarea name="text" placeholder="Write in English...">{{ original_text }}</textarea>
         <br>
         <button type="submit">Translate</button>
     </form>
@@ -124,8 +128,9 @@ HTML_TEMPLATE = """
 </html>
 """
 
+
 # =========================
-# Ruta principal
+# Ruta
 # =========================
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -144,7 +149,7 @@ def index():
 
 
 # =========================
-# Run app
+# Run
 # =========================
 if __name__ == "__main__":
     app.run(debug=True)
