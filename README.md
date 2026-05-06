@@ -1,6 +1,4 @@
-## 📸 Demo
-
-![App Screenshot](ss_py.png)
+![App Screenshot](./ss_py.png)
 ---
 
 ## 💡 Future Improvements
